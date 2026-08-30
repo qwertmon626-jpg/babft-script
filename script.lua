@@ -1,20 +1,69 @@
--- Получение размеров экрана
-local camera = workspace.CurrentCamera
-local screenSize = camera.ViewportSize
+if Abysall then
+    return 
+end
+getgenv().Abysall = {
+    Legit = true
+}
 
--- Создание текстового объекта на экране
-local textDrawing = Drawing.new("Text")
-textDrawing.Text = "иди нахуй а не скрипт"
-textDrawing.Size = 32
-textDrawing.Center = true
-textDrawing.Outline = true
-textDrawing.OutlineColor = Color3.fromRGB(0, 0, 0)
-textDrawing.Color = Color3.fromRGB(255, 0, 0) -- Красный цвет
+local GameList = {
+  [2440500124] = "Doors"
+}
 
--- Размещение ровно по центру
-textDrawing.Position = Vector2.new(screenSize.X / 2, screenSize.Y / 2)
-textDrawing.Visible = true
+local BaseUrl = "https://raw.githubusercontent.com/bocaj111004/Abysall/refs/heads/main/"
+getgenv().Abysall = {
+    Environment = loadstring(game:HttpGet(BaseUrl .. "Components/Environment.luau"))(),
+    ESPLibrary = loadstring(game:HttpGet(BaseUrl .. "Components/ESP.luau"))(),
 
--- Скрипт засыпает на 5 секунд, затем текст исчезает и удаляется
-task.wait(5)
-textDrawing:Remove()
+    Legit = true, -- pog
+}
+
+local function CloneReference(Object)
+    if Abysall and Abysall.Environment.cloneref then
+        return Abysall.Environment.cloneref(Object)
+    else
+        return Object
+    end
+end
+
+local Services = setmetatable({}, {
+    __index = function(self, Name)
+        return CloneReference(game:GetService(Name))
+    end
+})
+
+if Abysall.Environment.writefile and Abysall.Environment.readfile then
+    if not Abysall.Environment.isfile("Abysall/UserData.json") then
+        local Data = {
+            TotalExecutions = 0,
+            UILibrary = "Obsidian"
+        }
+        Abysall.Environment.writefile("Abysall/UserData.json", Services.HttpService:JSONEncode(Data))
+    end
+
+    local UserData = Abysall.Environment.readfile("Abysall/UserData.json")
+    local Decoded = Services.HttpService:JSONDecode(UserData)
+    if not Decoded.TotalExecutions then
+        Decoded.TotalExecutions = 0    
+    end
+
+    Decoded.TotalExecutions = Decoded.TotalExecutions + 1
+
+    if not Decoded.UILibrary then
+        Decoded.UILibrary = "Obsidian"
+    end
+
+    Abysall.TotalExecutions = Decoded.TotalExecutions
+    Abysall.UILibrary = Decoded.UILibrary
+
+    Abysall.Environment.writefile("Abysall/UserData.json", Services.HttpService:JSONEncode(Decoded))
+end
+
+Abysall.Interface = loadstring(game:HttpGet(BaseUrl .. "Components/Interface.luau"))()
+Abysall.Analytics = loadstring(game:HttpGet(BaseUrl .. "Components/Analytics.luau"))()
+
+local CurrentGame = GameList[game.GameId]
+if CurrentGame then
+    loadstring(game:HttpGet(BaseUrl .. "Games/" .. CurrentGame .. "/Loader.luau"))()
+else
+    loadstring(game:HttpGet(BaseUrl .. "Games/Universal/Loader.luau"))()
+end
