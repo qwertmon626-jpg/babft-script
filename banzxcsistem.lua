@@ -6,10 +6,10 @@ local LocalPlayer = Players.LocalPlayer
 
 -- НАСТРОЙКИ (МЕНЯЙ ТУТ)
 local Whitelist = {
-    "ТВОЙ_НИК",
-    "НИК_ДРУГА_1", 
-    "НИК_ДРУГА_2",
-    "НИК_ДРУГА_3"
+    "tubers0268",
+    "ilysha23112000", 
+    "Papirus333564",
+    "Dvanseler"
 }
 
 -- ПРИЧИНА КИКА
