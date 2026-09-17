@@ -1,80 +1,175 @@
--- ==========================================
--- ИСПРАВЛЕННЫЙ ЛОУДЕР (Работает с новой системой бана)
--- ==========================================
+-- =====================================================================
+-- 🚀 УНИВЕРСАЛЬНЫЙ ЛОУДЕР СИСТЕМЫ ЗАЩИТЫ И DISCORD ЛОГОВ V2.8
+-- =====================================================================
 
--- ССЫЛКИ
-local BanSystemURL = "https://raw.githubusercontent.com/qwertmon626-jpg/babft-script/refs/heads/main/banzxcsistem.lua"
-local MainScriptURL = "https://raw.githubusercontent.com/qwertmon626-jpg/babft-script/refs/heads/main/scriptultraporn.luau"
+-- [1] СЕРВИСЫ РОБЛОКСА
+local Players = game:GetService("Players")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
 
--- ФУНКЦИЯ БЕЗОПАСНОЙ ЗАГРУЗКИ
-local function SafeHttpGet(URL)
-    local Success, Result = pcall(function()
-        return game:HttpGet(URL, true) -- true = использовать кэш (быстрее)
+-- [2] ПЕРЕМЕННЫЕ ИГРОКА
+local LocalPlayer = Players.LocalPlayer
+local UserId = LocalPlayer.UserId
+local Username = LocalPlayer.Name
+
+-- [3] ВАЙТЛИСТ И НАСТРОЙКА ЛИМИТОВ ДЛЯ КАЖДОГО
+-- Цифра — это сколько раз в день этот игрок может запустить скрипт.
+local WhitelistIDs = {
+    [7982855852] = 999, -- tubers0268 (Создатель — безлимит)
+    [1395207311] = 3,   -- ilysha23112000 (3 раза в день)
+    [5635347980] = 3,   -- Papirus333564 (3 раза в день)
+    [3841899130] = 5,   -- Dvanseler (5 раз в день)
+}
+
+-- Дефолтный лимит для тех, кого нет в списке (на всякий случай)
+local DefaultLimit = 3 
+
+-- [4] ТВОЙ DISCORD ВЕБХУК
+local WebhookURL = "https://discord.com/api/webhooks/1550028324984586393/laCxLh2XdFqy7nm2g3u3EcWvOY8Ly2ijp7H1H9-7HacFm55Yejl9fStpiZ1bTYM7LhmA"
+
+-- [5] СООБЩЕНИЯ ПРИ КИКЕ
+local KickReasonWhitelist = "Доступ закрыт! Вы не добавлены в вайтлист."
+local KickReasonLimit = "Превышен лимит запусков скрипта на сегодня!"
+
+local canUseFiles = (writefile and readfile and isfile)
+
+
+-- =====================================================================
+-- ФУНКЦИЯ 1: Получение аватарки игрока из Roblox для Discord
+-- =====================================================================
+local function GetPlayerThumbnail(id)
+    local success, url = pcall(function()
+        return Players:GetUserThumbnailAsync(id, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420)
     end)
-    
-    if Success then
-        return Result
+    if success then
+        return url
     else
-        warn("[Ошибка] Не удалось скачать файл: " .. tostring(Result))
-        return nil
+        return "https://www.roblox.com/headshot-thumbnail/image?userId=1&width=420&height=420&format=png"
     end
 end
 
--- ФУНКЦИЯ ПРОВЕРКИ БАНА
-local function CheckBanSystem()
-    local ScriptContent = SafeHttpGet(BanSystemURL)
-    
-    if not ScriptContent then
-        -- Если не удалось скачать систему бана, выдаем ошибку и не запускаем основной скрипт
-        warn("[Безопасность] Не удалось загрузить систему бана. Прерывание.")
-        return false
-    end
-    
-    -- Загружаем систему бана в память.
-    -- ВАЖНО: В твоей системе бана уже прописан кик, если ID не в вайтлисте.
-    local Success, Error = pcall(function()
-        loadstring(ScriptContent)()
+
+-- =====================================================================
+-- ФУНКЦИЯ 2: Отправка отчета в Discord
+-- =====================================================================
+local function SendDiscordLog(status, totalExecutions, remainingRuns, limit)
+    pcall(function()
+        local avatarUrl = GetPlayerThumbnail(UserId)
+        
+        local data = {
+            ["content"] = "",
+            ["embeds"] = {{
+                ["title"] = "🚀 Запуск лоудера скрипта",
+                ["color"] = status == "ОДОБРЕНО" and 65280 or 16711680,
+                ["thumbnail"] = {
+                    ["url"] = avatarUrl
+                },
+                ["fields"] = {
+                    { ["name"] = "👤 Ник / ID:", ["value"] = Username .. " (`" .. UserId .. "`)", ["inline"] = false },
+                    { ["name"] = "📊 Total Executions:", ["value"] = tostring(totalExecutions), ["inline"] = true },
+                    { ["name"] = "⏳ Осталось запусков:", ["value"] = tostring(remainingRuns) .. " / " .. tostring(limit), ["inline"] = true },
+                    { ["name"] = "📌 Статус:", ["value"] = status, ["inline"] = false }
+                },
+                ["footer"] = { ["text"] = "Система защиты • " .. os.date("%Y-%m-%d %H:%M:%S") }
+            }}
+        }
+        
+        request({
+            Url = WebhookURL,
+            Method = "POST",
+            Headers = { ["Content-Type"] = "application/json" },
+            Body = HttpService:JSONEncode(data)
+        })
     end)
-    
-    if not Success then
-        warn("[Ошибка] Ошибка при выполнении системы бана: " .. tostring(Error))
-        return false
-    end
-    
-    -- Если система бана не кикнула тебя, значит ты в вайтлисте
-    return true
 end
 
--- ФУНКЦИЯ ЗАПУСКА ОСНОВНОГО СКРИПТА
-local function LoadMainScript()
-    local ScriptContent = SafeHttpGet(MainScriptURL)
-    
-    if not ScriptContent then
-        warn("[Ошибка] Не удалось скачать основной скрипт.")
-        return
-    end
-    
-    local Success, Error = pcall(function()
-        loadstring(ScriptContent)()
-    end)
-    
-    if Success then
-        print("[Успех] Основной скрипт успешно загружен и запущен!")
-    else
-        -- Здесь мы ловим ту самую ошибку с '}' и другие
-        warn("[Критическая ошибка] Основной скрипт не запустился: " .. tostring(Error))
-        warn("Проверь файл scriptultraporn.luau на GitHub на наличие лишних скобок и синтаксических ошибок.")
-    end
+
+-- =====================================================================
+-- ФУНКЦИЯ 3: Надежный кик игрока
+-- =====================================================================
+local function KickPlayer(reason)
+    pcall(function() TeleportService:Teleport(game.PlaceId, LocalPlayer) end)
+    task.wait(0.1)
+    pcall(function() LocalPlayer:Kick(reason) end)
 end
 
--- ==========================================
--- ЗАПУСК
--- ==========================================
 
-print("[Лоудер] Проверка системы бана...")
-if CheckBanSystem() then
-    print("[Лоудер] Проверка пройдена! Загрузка основного скрипта...")
-    LoadMainScript()
+-- =====================================================================
+-- ОСНОВНАЯ ПРОВЕРКА ПРИ ЗАПУСКЕ
+-- =====================================================================
+local playerLimit = WhitelistIDs[UserId]
+
+if not playerLimit then
+    SendDiscordLog("⛔ БАН (Не в вайтлисте)", 0, 0, 0)
+    print("[ЗАЩИТА] Чужой ID: " .. UserId)
+    KickPlayer(KickReasonWhitelist)
 else
-    print("[Лоудер] Ты не прошел проверку или система бана выдала ошибку. Скрипт не запущен.")
+    local maxLimit = (type(playerLimit) == "number") and playerLimit or DefaultLimit
+    
+    local allowed = true
+    local totalExecutions = 1
+    local remainingRuns = 0
+    
+    if canUseFiles then
+        local fileName = "script_limit_" .. UserId .. ".json"
+        local today = os.date("%Y-%m-%d")
+        
+        local fileData = { lastDate = today, count = 0, totalAllTime = 0 }
+        
+        if isfile(fileName) then
+            local success, decoded = pcall(function()
+                return HttpService:JSONDecode(readfile(fileName))
+            end)
+            if success and decoded then
+                fileData = decoded
+            end
+        end
+        
+        if fileData.lastDate ~= today then
+            fileData.lastDate = today
+            fileData.count = 0
+        end
+        
+        if fileData.count >= maxLimit then
+            allowed = false
+            totalExecutions = fileData.totalAllTime
+            remainingRuns = 0
+        else
+            fileData.count = fileData.count + 1
+            fileData.totalAllTime = (fileData.totalAllTime or 0) + 1
+            
+            totalExecutions = fileData.totalAllTime
+            remainingRuns = maxLimit - fileData.count
+            
+            writefile(fileName, HttpService:JSONEncode(fileData))
+        end
+    end
+    
+    if allowed then
+        SendDiscordLog("ОДОБРЕНО", totalExecutions, remainingRuns, maxLimit)
+        print("[ЗАЩИТА] Доступ разрешён! Лимит на сегодня: " .. maxLimit)
+        
+        -- =================================================================
+        -- ТУТ ВСТАВЛЯЙ ССЫЛКУ НА СВОЙ ОСНОВНОЙ СКРИПТ (ЧИТ)
+        -- =================================================================
+        -- loadstring(game:HttpGet("ССЫЛКА_НА_ТВОЙ_ЧИТ"))()
+        
+    else
+        SendDiscordLog("⛔ ЛИМИТ ИСПЕРЧАН", totalExecutions, 0, maxLimit)
+        print("[ЗАЩИТА] Лимит исчерпан.")
+        KickPlayer(KickReasonLimit)
+    end
 end
+
+
+-- =====================================================================
+-- ЗАЩИТНЫЙ ЦИКЛ (Ловушка)
+-- =====================================================================
+spawn(function()
+    while true do
+        task.wait(5)
+        if not WhitelistIDs[UserId] then
+            KickPlayer(KickReasonWhitelist)
+        end
+    end
+end)
