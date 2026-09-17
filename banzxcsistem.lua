@@ -1,5 +1,5 @@
 -- =====================================================================
--- 🛡️ НОВАЯ СИСТЕМА БАНА И ВАЙТЛИСТА
+-- 🛡️ ЧИСТАЯ СИСТЕМА БАНА И ЛИМИТОВ (БЕЗ ДИСКОРДА)
 -- =====================================================================
 
 local Players = game:GetService("Players")
@@ -8,63 +8,33 @@ local HttpService = game:GetService("HttpService")
 
 local LocalPlayer = Players.LocalPlayer
 local UserId = LocalPlayer.UserId
-local Username = LocalPlayer.Name
 
--- [1] БЕЛЫЙ СПИСОК И ЛИМИТЫ (ID = сколько раз в день можно запустить)
+-- Белый список и лимиты заходов в день
 local Whitelist = {
-    [7982855852] = 999, -- tubers0268 (Создатель — безлимит)
-    [1395207311] = 3,   -- ilysha23112000 (3 раза)
-    [5635347980] = 3,   -- Papirus333564 (3 раза)
-    [3841899130] = 5,   -- Dvanseler (5 раз)
+    [7982855852] = 999, -- tubers0268
+    [1395207311] = 3,   -- ilysha23112000
+    [5635347980] = 3,   -- Papirus333564
+    [3841899130] = 5,   -- Dvanseler
 }
 
 local DefaultLimit = 3
-local WebhookURL = "https://discord.com/api/webhooks/1550028324984586393/laCxLh2XdFqy7nm2g3u3EcWvOY8Ly2ijp7H1H9-7HacFm55Yejl9fStpiZ1bTYM7LhmA"
 local canFiles = (writefile and readfile and isfile)
 
--- Функция отправки красивого лога в Discord
-local function SendLog(status, total, left, limit)
-    pcall(function()
-        local data = {
-            ["embeds"] = {{
-                ["title"] = "🚀 Попытка запуска лоудера",
-                ["color"] = status == "ОДОБРЕНО" and 65280 or 16711680,
-                ["fields"] = {
-                    { ["name"] = "Запусков сегодня:", ["value"] = tostring(total) .. " / " .. tostring(limit), ["inline"] = false },
-                    { ["name"] = "Ник:", ["value"] = Username, ["inline"] = true },
-                    { ["name"] = "ID:", ["value"] = tostring(UserId), ["inline"] = true },
-                    { ["name"] = "Статус:", ["value"] = status, ["inline"] = false }
-                },
-                ["footer"] = { ["text"] = os.date("%Y-%m-%d %H:%M:%S") }
-            }}
-        }
-        request({
-            Url = WebhookURL,
-            Method = "POST",
-            Headers = { ["Content-Type"] = "application/json" },
-            Body = HttpService:JSONEncode(data)
-        })
-    end)
-end
-
--- Функция кика
 local function Kick(reason)
     pcall(function() TeleportService:Teleport(game.PlaceId, LocalPlayer) end)
     task.wait(0.1)
     pcall(function() LocalPlayer:Kick(reason) end)
 end
 
--- [2] ПРОВЕРКА
 local userLimit = Whitelist[UserId]
 
 if not userLimit then
-    SendLog("⛔ ОТКАЗАНО (Нет в вайтлисте)", 0, 0, 0)
     Kick("Доступ закрыт: Вас нет в белом списке!")
-    error("Stopped execution")
+    error("Not whitelisted")
 else
     local maxLimit = (type(userLimit) == "number") and userLimit or DefaultLimit
     local allowed = true
-    local totalExecutions = 1
+    local currentExecutions = 1
     local remainingRuns = 0
     
     if canFiles then
@@ -86,24 +56,25 @@ else
         
         if fileData.count >= maxLimit then
             allowed = false
-            totalExecutions = fileData.totalAllTime
+            currentExecutions = fileData.totalAllTime
             remainingRuns = 0
         else
             fileData.count = fileData.count + 1
             fileData.totalAllTime = (fileData.totalAllTime or 0) + 1
-            totalExecutions = fileData.totalAllTime
+            currentExecutions = fileData.totalAllTime
             remainingRuns = maxLimit - fileData.count
             
             writefile(fileName, HttpService:JSONEncode(fileData))
         end
     end
     
-    if allowed then
-        SendLog("ОДОБРЕНО", totalExecutions, remainingRuns, maxLimit)
-        -- Проверка прошла успешно, идем дальше к основному скрипту
-    else
-        SendLog("⛔ ЛИМИТ ИСПЕРЧАН", totalExecutions, 0, maxLimit)
+    if not allowed then
         Kick("Превышен дневной лимит запусков скрипта!")
-        error("Stopped execution")
+        error("Limit reached")
     end
+    
+    -- Сохраняем данные для лоудера, чтобы он знал сколько запусков осталось
+    getgenv().ScriptExecutions = currentExecutions
+    getgenv().ScriptRemaining = remainingRuns
+    getgenv().ScriptLimit = maxLimit
 end
