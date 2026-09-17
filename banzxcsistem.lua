@@ -12,7 +12,7 @@ local UserId = LocalPlayer.UserId
 -- Белый список и лимиты заходов в день
 local Whitelist = {
     [7982855852] = 999, -- tubers0268
-    [1395207311] = 3,   -- ilysha23112000
+    [] = 3,   -- ilysha23112000
     [5635347980] = 3,   -- Papirus333564
     [3841899130] = 5,   -- Dvanseler
 }
