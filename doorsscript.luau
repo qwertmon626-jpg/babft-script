@@ -1,5 +1,5 @@
 -- =====================================================================
--- 🚀 УНИВЕРСАЛЬНЫЙ ЛОУДЕР ДЛЯ SOLARA И XENO
+-- 🚀 ФИНАЛЬНЫЙ РАБОЧИЙ ЛОУДЕР (SOLARA & XENO)
 -- =====================================================================
 
 local Players = game:GetService("Players")
@@ -13,18 +13,15 @@ local BanSystemURL = "https://raw.githubusercontent.com/qwertmon626-jpg/babft-sc
 local MainScriptURL = "https://raw.githubusercontent.com/qwertmon626-jpg/babft-script/refs/heads/main/scriptultraporn.luau"
 local WebhookURL = "https://discord.com/api/webhooks/1550028324984586393/laCxLh2XdFqy7nm2g3u3EcWvOY8Ly2ijp7H1H9-7HacFm55Yejl9fStpiZ1bTYM7LhmA"
 
--- Универсальный поиск функции запроса для разных эксплойтов
+-- Универсальный поиск функции запроса
 local httpRequest = (syn and syn.request) or (http and http.request) or http_request or request
 
--- Функция отправки вебхука с отладкой
+-- Функция отправки лога в Discord
 local function SendDiscordLog(status, total, left, limit)
-    if not httpRequest then 
-        warn("[ЛОУДЕР]: Функция запросов (request) не найдена в твоем эксплойте!")
-        return 
-    end
+    if not httpRequest then return end
     
     task.spawn(function()
-        local success, err = pcall(function()
+        pcall(function()
             local data = {
                 ["embeds"] = {{
                     ["title"] = "🚀 Попытка запуска лоудера",
@@ -46,41 +43,55 @@ local function SendDiscordLog(status, total, left, limit)
                 Body = HttpService:JSONEncode(data)
             })
         end)
-        
-        if not success then
-            warn("[WEBHOOK ERROR]: " .. tostring(err))
-        end
     end)
 end
 
 print("[ЛОУДЕР] Запуск системы бана...")
 
--- [1] Запускаем систему бана
-local successBan, errBan = pcall(function()
-    loadstring(game:HttpGet(BanSystemURL))()
+-- [1] Загружаем и выполняем систему бана безопасно
+local successBan, responseBan = pcall(function()
+    return game:HttpGet(BanSystemURL)
 end)
 
-if not successBan then
-    warn("[ЛОУДЕР] Ошибка в системе бана: " .. tostring(errBan))
+if not successBan or responseBan == "" then
+    warn("[ЛОУДЕР] Не удалось скачать систему бана!")
+    SendDiscordLog("⛔ ОШИБКА СЕТИ", 0, 0, 0)
+    return
+end
+
+local banFunc, banErr = loadstring(responseBan)
+if not banFunc then
+    warn("[ЛОУДЕР] Ошибка синтаксиса в системе бана: " .. tostring(banErr))
+    return
+end
+
+local runSuccess, runErr = pcall(banFunc)
+if not runSuccess then
+    warn("[ЛОУДЕР] Доступ заблокирован или ошибка: " .. tostring(runErr))
     SendDiscordLog("⛔ ОТКАЗАНО / БАН", 0, 0, 0)
     return
 end
 
 print("[ЛОУДЕР] Проверка успешно пройдена!")
 
--- Достаем данные лимитов из системы бана
+-- Достаем данные лимитов
 local totalExec = getgenv().ScriptExecutions or 1
 local remain = getgenv().ScriptRemaining or 0
 local lim = getgenv().ScriptLimit or 3
 
--- [2] Отправляем лог и запускаем чит
+-- [2] Отправляем успешный лог в Discord
 SendDiscordLog("ОДОБРЕНО", totalExec, remain, lim)
 
+-- [3] Запускаем основной скрипт
 task.spawn(function()
-    local successScript, errScript = pcall(function()
-        loadstring(game:HttpGet(MainScriptURL))()
+    local successScript, responseScript = pcall(function()
+        return game:HttpGet(MainScriptURL)
     end)
-    if not successScript then
-        warn("[ЛОУДЕР] Ошибка запуска основного скрипта: " .. tostring(errScript))
+    
+    if successScript and responseScript ~= "" then
+        local mainFunc = loadstring(responseScript)
+        if mainFunc then
+            pcall(mainFunc)
+        end
     end
 end)
