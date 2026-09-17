@@ -1,79 +1,113 @@
--- ОБНОВЛЕННАЯ СИСТЕМА БАНА (КИК КАК ОТ АДМИНА) V2.0
--- Использует User ID вместо ников (надежнее)
-
+-- ЛОУДЕР С ВАЙТЛИСТОМ, ЛИМИТАМИ И DISCORD ВЕБХУКОМ
 local Players = game:GetService("Players")
 local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+
 local LocalPlayer = Players.LocalPlayer
 local UserId = LocalPlayer.UserId
+local Username = LocalPlayer.Name
 
--- НАСТРОЙКИ (МЕНЯЙ ТУТ, ЛУЧШЕ ИСПОЛЬЗОВАТЬ ID)
+-- ТВОЙ ВАЙТЛИСТ И НАСТРОЙКИ ЛИМИТОВ ДЛЯ КАЖДОГО
+-- maxRuns = сколько раз в день этот игрок может запустить скрипт
 local WhitelistIDs = {
-    [7982855852] = true, -- tubers0268
-    [1395207311] = true, -- ilysha23112000
-    [5635347980] = true, -- Papirus333564
-    [3841899130] = true, -- Dvanseler
+    [7982855852] = { name = "tuber0268", maxRuns = 999 }, -- Безлимит (или очень много)
+    [1395207311] = { name = "ilysha23112000", maxRuns = 3 }, -- Только 3 раз в день
+    [5635347980] = { name = "Papirus333564", maxRuns = 3 }, -- Только 3 раз в день
+    [3841899130] = { name = "Dvanseler", maxRuns = 3 }, -- 3 раза в день
 }
 
--- ПРИЧИНА КИКА
-local KickReason = "Ты был забанен за распространение скрипта!"
+-- Твой вебхук
+local WebhookURL = "https://discord.com/api/webhooks/1550028324984586393/laCxLh2XdFqy7nm2g3u3EcWvOY8Ly2ijp7H1H9-7HacFm55Yejl9fStpiZ1bTYM7LhmA"
 
--- ФУНКЦИЯ ПРОВЕРКИ (по ID)
-local function IsBanned()
-    if WhitelistIDs[UserId] then
-        return false -- Ты в вайтлисте, не в бане
-    else
-        return true -- Тебя нет в списке, ты в бане
-    end
+-- Проверка поддержки файлов эксплойтом
+local canUseFiles = (writefile and readfile and isfile)
+
+-- Функция отправки лога в Discord
+local function SendDiscordLog(status, extraInfo)
+    pcall(function()
+        local data = {
+            ["content"] = "",
+            ["embeds"] = {{
+                ["title"] = "🚀 Попытка запуска лоудера",
+                ["description"] = extraInfo or "",
+                ["color"] = status == "ОДОБРЕНО" and 65280 or 16711680,
+                ["fields"] = {
+                    { ["name"] = "Ник:", ["value"] = Username, ["inline"] = true },
+                    { ["name"] = "ID:", ["value"] = tostring(UserId), ["inline"] = true },
+                    { ["name"] = "Статус:", ["value"] = status, ["inline"] = false }
+                },
+                ["footer"] = { ["text"] = os.date("%Y-%m-%d %H:%M:%S") }
+            }}
+        }
+        
+        request({
+            Url = WebhookURL,
+            Method = "POST",
+            Headers = { ["Content-Type"] = "application/json" },
+            Body = HttpService:JSONEncode(data)
+        })
+    end)
 end
 
--- ФУНКЦИЯ КИКА (Самый надежный способ)
-local function KickPlayer()
-    -- Способ 1: Попытка кикнуть через TeleportService (часто работает даже если обычный Kick заблокирован)
-    pcall(function()
-        TeleportService:Teleport(game.PlaceId, LocalPlayer)
-    end)
-    
-    -- Способ 2: Запасной вариант (если первый не сработал)
+-- Функция кика
+local function KickPlayer(reason)
+    pcall(function() TeleportService:Teleport(game.PlaceId, LocalPlayer) end)
     task.wait(0.1)
-    pcall(function()
-        LocalPlayer:Kick(KickReason)
-    end)
-    
-    -- Способ 3: Кик через ReplicatedStorage (если у игры есть такой Remote, раскомментируй)
-    -- pcall(function()
-    --     local Remote = game:GetService("ReplicatedStorage"):FindFirstChild("KickPlayer")
-    --     if Remote then Remote:InvokeServer(KickReason) end
-    -- end)
+    pcall(function() LocalPlayer:Kick(reason) end)
 end
 
 -- ОСНОВНАЯ ПРОВЕРКА
-if IsBanned() then
-    print("Обнаружен нарушитель (ID: " .. UserId .. ")")
-    print("Выполняется кик...")
-    KickPlayer()
-else
-    print("Доступ разрешён для (ID: " .. UserId .. ")")
-    -- ТУТ ЗАПУСКАЙ СВОЙ ОСНОВНОЙ СКРИПТ
-    -- loadstring(game:HttpGet("ссылка_на_твой_скрипт"))()
-end
+local userData = WhitelistIDs[UserId]
 
--- ЗАЩИТА ОТ ОСТАНОВКИ (Ловушка)
--- Если кто-то попытается вырубить скрипт или заменить его, кик всё равно сработает
-spawn(function()
-    while true do
-        task.wait(3)
-        if IsBanned() then
-            KickPlayer()
+if not userData then
+    -- Если игрока вообще нет в вайтлисте
+    SendDiscordLog("⛔ БАН (Нет в вайтлисте)")
+    KickPlayer("Доступ запрещен! Вы не в вайтлисте.")
+else
+    -- Если игрок есть в вайтлисте, проверяем его лимит на сегодня
+    local allowed = true
+    local runsToday = 1
+    
+    if canUseFiles then
+        local fileName = "script_limit_" .. UserId .. ".json"
+        local today = os.date("%Y-%m-%d")
+        
+        local fileData = { lastDate = today, count = 0 }
+        
+        if isfile(fileName) then
+            local success, decoded = pcall(function()
+                return HttpService:JSONDecode(readfile(fileName))
+            end)
+            if success and decoded and decoded.lastDate == today then
+                fileData = decoded
+            end
+        end
+        
+        -- Проверяем, не превысил ли лимит
+        if fileData.lastDate == today and fileData.count >= userData.maxRuns then
+            allowed = false
+            runsToday = fileData.count
+        else
+            -- Увеличиваем счетчик запусков
+            if fileData.lastDate ~= today then
+                fileData.lastDate = today
+                fileData.count = 1
+            else
+                fileData.count = fileData.count + 1
+            end
+            runsToday = fileData.count
+            writefile(fileName, HttpService:JSONEncode(fileData))
         end
     end
-end)
-
--- Дополнительная защита: Если скрипт пытаются удалить (например, через геймджекер)
-LocalPlayer.Changed:Connect(function(prop)
-    if prop == "Parent" and LocalPlayer.Parent == nil then
-        -- Если игрока попытались выкинуть или скрипт сломался, кикаем насильно
-        pcall(function()
-            TeleportService:Teleport(game.PlaceId, LocalPlayer)
-        end)
+    
+    if allowed then
+        SendDiscordLog("ОДОБРЕНО", "Запусков сегодня: " .. runsToday .. " / " .. userData.maxRuns)
+        print("Доступ разрешен! Запуск скрипта...")
+        
+        -- ТУТ ТВОЙ ОСНОВНОЙ СКРИПТ ЧИТА
+        -- loadstring(game:HttpGet("ссылка_на_скрипт"))()
+    else
+        SendDiscordLog("⛔ ЛИМИТ ИСПЕРЧАН", "Игрок исчерпал лимит (" .. runsToday .. "/" .. userData.maxRuns .. ")")
+        KickPlayer("Превышен лимит запусков скрипта на сегодня! Лимит: " .. userData.maxRuns)
     end
-end)
+end
