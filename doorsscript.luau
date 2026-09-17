@@ -48,7 +48,7 @@ local function SendDiscordLog(status, total, left, limit)
         end)
         
         if not success then
-            warn("[WEBHOOK ERROR]: " . tostring(err))
+            warn("[WEBHOOK ERROR]: " .. tostring(err))
         end
     end)
 end
